@@ -7,6 +7,7 @@ import '../../../../app/theme/app_spacing.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
+import '../providers/auth_provider.dart';
 
 class RegisterClientScreen extends ConsumerStatefulWidget {
   const RegisterClientScreen({super.key});
@@ -24,7 +25,6 @@ class _RegisterClientScreenState extends ConsumerState<RegisterClientScreen> {
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
   bool _acceptTerms = false;
-  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -39,28 +39,52 @@ class _RegisterClientScreenState extends ConsumerState<RegisterClientScreen> {
   Future<void> _onRegister() async {
     if (!_formKey.currentState!.validate()) return;
     if (!_acceptTerms) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Debes aceptar los términos y condiciones')),
-      );
+      _showError('Debes aceptar los términos y condiciones');
       return;
     }
-    setState(() => _isLoading = true);
-    // TODO: Integrar AuthRepository en Fase 2
-    await Future.delayed(const Duration(seconds: 1));
+
+    final success = await ref.read(authProvider.notifier).signUpClient(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+          fullName: _nameController.text.trim(),
+          phone: _phoneController.text.trim().isEmpty
+              ? null
+              : _phoneController.text.trim(),
+        );
+
     if (!mounted) return;
-    setState(() => _isLoading = false);
-    context.go(AppRoutes.clientHome);
+
+    if (success) {
+      context.go(AppRoutes.clientHome);
+    } else {
+      final error = ref.read(authProvider).error;
+      _showError(error ?? 'Error al crear la cuenta');
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final isLoading = ref.watch(authProvider).isLoading;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Crear cuenta'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => context.pop(),
+          onPressed: isLoading ? null : () => context.pop(),
         ),
       ),
       body: SafeArea(
@@ -87,7 +111,7 @@ class _RegisterClientScreenState extends ConsumerState<RegisterClientScreen> {
                       SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'Estás creando una cuenta de Cliente.\nEncuentra prestadores cercanos rápidamente.',
+                          'Cuenta de Cliente — Encuentra prestadores cercanos rápidamente.',
                           style: TextStyle(
                             fontFamily: 'Poppins',
                             fontSize: 12,
@@ -106,11 +130,9 @@ class _RegisterClientScreenState extends ConsumerState<RegisterClientScreen> {
                   hint: 'Ej: Juan Pérez',
                   controller: _nameController,
                   validator: Validators.fullName,
-                  prefixIcon: const Icon(
-                    Icons.person_outline_rounded,
-                    color: AppColors.grey500,
-                    size: 20,
-                  ),
+                  enabled: !isLoading,
+                  prefixIcon: const Icon(Icons.person_outline_rounded,
+                      color: AppColors.grey500, size: 20),
                 ),
                 const SizedBox(height: 16),
                 AppTextField(
@@ -119,24 +141,20 @@ class _RegisterClientScreenState extends ConsumerState<RegisterClientScreen> {
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
                   validator: Validators.email,
-                  prefixIcon: const Icon(
-                    Icons.mail_outline_rounded,
-                    color: AppColors.grey500,
-                    size: 20,
-                  ),
+                  enabled: !isLoading,
+                  prefixIcon: const Icon(Icons.mail_outline_rounded,
+                      color: AppColors.grey500, size: 20),
                 ),
                 const SizedBox(height: 16),
                 AppTextField(
-                  label: 'Teléfono',
+                  label: 'Teléfono (opcional)',
                   hint: '+57 300 000 0000',
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
                   validator: Validators.phone,
-                  prefixIcon: const Icon(
-                    Icons.phone_outlined,
-                    color: AppColors.grey500,
-                    size: 20,
-                  ),
+                  enabled: !isLoading,
+                  prefixIcon: const Icon(Icons.phone_outlined,
+                      color: AppColors.grey500, size: 20),
                 ),
                 const SizedBox(height: 16),
                 AppTextField(
@@ -145,11 +163,9 @@ class _RegisterClientScreenState extends ConsumerState<RegisterClientScreen> {
                   controller: _passwordController,
                   obscureText: true,
                   validator: Validators.password,
-                  prefixIcon: const Icon(
-                    Icons.lock_outline_rounded,
-                    color: AppColors.grey500,
-                    size: 20,
-                  ),
+                  enabled: !isLoading,
+                  prefixIcon: const Icon(Icons.lock_outline_rounded,
+                      color: AppColors.grey500, size: 20),
                 ),
                 const SizedBox(height: 16),
                 AppTextField(
@@ -160,19 +176,18 @@ class _RegisterClientScreenState extends ConsumerState<RegisterClientScreen> {
                   textInputAction: TextInputAction.done,
                   validator: (v) =>
                       Validators.passwordConfirm(v, _passwordController.text),
-                  prefixIcon: const Icon(
-                    Icons.lock_outline_rounded,
-                    color: AppColors.grey500,
-                    size: 20,
-                  ),
+                  enabled: !isLoading,
+                  prefixIcon: const Icon(Icons.lock_outline_rounded,
+                      color: AppColors.grey500, size: 20),
                 ),
                 const SizedBox(height: 16),
                 Row(
                   children: [
                     Checkbox(
                       value: _acceptTerms,
-                      onChanged: (v) =>
-                          setState(() => _acceptTerms = v ?? false),
+                      onChanged: isLoading
+                          ? null
+                          : (v) => setState(() => _acceptTerms = v ?? false),
                       activeColor: AppColors.primary,
                     ),
                     const Expanded(
@@ -187,11 +202,11 @@ class _RegisterClientScreenState extends ConsumerState<RegisterClientScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 AppButton(
                   label: 'Crear cuenta',
-                  isLoading: _isLoading,
-                  onPressed: _onRegister,
+                  isLoading: isLoading,
+                  onPressed: isLoading ? null : _onRegister,
                 ),
                 const SizedBox(height: 24),
               ],

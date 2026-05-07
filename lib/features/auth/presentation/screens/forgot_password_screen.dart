@@ -6,6 +6,7 @@ import '../../../../app/theme/app_spacing.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
+import '../providers/auth_provider.dart';
 
 class ForgotPasswordScreen extends ConsumerStatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -30,13 +31,28 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   Future<void> _onSend() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
-    // TODO: Supabase auth.resetPasswordForEmail(...) en Fase 2
-    await Future.delayed(const Duration(seconds: 1));
+
+    final success = await ref.read(authProvider.notifier).sendPasswordReset(
+          email: _emailController.text.trim(),
+        );
+
     if (!mounted) return;
-    setState(() {
-      _isLoading = false;
-      _sent = true;
-    });
+    setState(() => _isLoading = false);
+
+    if (success) {
+      setState(() => _sent = true);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('No se pudo enviar el correo. Verifica tu email.'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    }
   }
 
   @override
@@ -78,7 +94,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
           ),
           const SizedBox(height: 12),
           const Text(
-            'Te enviaremos un enlace a tu correo para que puedas crear una nueva contraseña.',
+            'Te enviaremos un enlace a tu correo para crear una nueva contraseña.',
             style: TextStyle(
               fontFamily: 'Poppins',
               fontSize: 14,
@@ -93,17 +109,15 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
             controller: _emailController,
             keyboardType: TextInputType.emailAddress,
             validator: Validators.email,
-            prefixIcon: const Icon(
-              Icons.mail_outline_rounded,
-              color: AppColors.grey500,
-              size: 20,
-            ),
+            enabled: !_isLoading,
+            prefixIcon: const Icon(Icons.mail_outline_rounded,
+                color: AppColors.grey500, size: 20),
           ),
           const SizedBox(height: 24),
           AppButton(
             label: 'Enviar enlace',
             isLoading: _isLoading,
-            onPressed: _onSend,
+            onPressed: _isLoading ? null : _onSend,
           ),
         ],
       ),
@@ -117,15 +131,12 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
         Container(
           width: 100,
           height: 100,
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             color: AppColors.successSurface,
             shape: BoxShape.circle,
           ),
-          child: const Icon(
-            Icons.mark_email_read_rounded,
-            size: 48,
-            color: AppColors.success,
-          ),
+          child: const Icon(Icons.mark_email_read_rounded,
+              size: 48, color: AppColors.success),
         ),
         const SizedBox(height: 24),
         const Text(
@@ -139,7 +150,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
         ),
         const SizedBox(height: 12),
         Text(
-          'Revisa tu correo ${_emailController.text} y sigue las instrucciones para restablecer tu contraseña.',
+          'Revisa tu correo ${_emailController.text.trim()} y sigue las instrucciones para restablecer tu contraseña.',
           textAlign: TextAlign.center,
           style: const TextStyle(
             fontFamily: 'Poppins',

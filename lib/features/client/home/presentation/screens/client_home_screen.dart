@@ -5,6 +5,7 @@ import '../../../../../app/router/app_routes.dart';
 import '../../../../../app/theme/app_colors.dart';
 import '../../../../../app/theme/app_spacing.dart';
 import '../../../../../core/widgets/app_avatar.dart';
+import '../../../../../features/auth/presentation/providers/auth_provider.dart';
 import '../../../../../shared/models/category_model.dart';
 import '../widgets/category_grid.dart';
 import '../widgets/provider_card.dart';
@@ -55,19 +56,21 @@ class _ClientHomeScreenState extends ConsumerState<ClientHomeScreen> {
   }
 
   Widget _buildHeader() {
+    final user = ref.watch(currentUserProvider);
+    final name = user?.firstName ?? 'Usuario';
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
         child: Row(
           children: [
-            const AppAvatar(name: 'Juan Pérez', size: 44),
+            AppAvatar(name: user?.fullName ?? name, imageUrl: user?.avatarUrl, size: 44),
             const SizedBox(width: 12),
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Hola, Juan 👋',
+                    'Hola, $name 👋',
                     style: TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 16,
@@ -75,13 +78,13 @@ class _ClientHomeScreenState extends ConsumerState<ClientHomeScreen> {
                       color: AppColors.grey900,
                     ),
                   ),
-                  Row(
+                  const Row(
                     children: [
                       Icon(Icons.place_outlined,
                           size: 14, color: AppColors.grey500),
                       SizedBox(width: 2),
                       Text(
-                        'Bogotá, Colombia',
+                        'Ubicación actual',
                         style: TextStyle(
                           fontFamily: 'Poppins',
                           fontSize: 12,

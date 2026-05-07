@@ -8,6 +8,7 @@ import '../../../../core/utils/validators.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../../../../shared/models/category_model.dart';
+import '../providers/auth_provider.dart';
 
 class RegisterProviderScreen extends ConsumerStatefulWidget {
   const RegisterProviderScreen({super.key});
@@ -27,7 +28,6 @@ class _RegisterProviderScreenState
   final _bioController = TextEditingController();
   final _experienceController = TextEditingController();
   CategoryModel? _selectedCategory;
-  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -43,29 +43,57 @@ class _RegisterProviderScreenState
   Future<void> _onRegister() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedCategory == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Selecciona tu categoría principal')),
-      );
+      _showError('Selecciona tu categoría principal');
       return;
     }
-    setState(() => _isLoading = true);
-    // TODO: Integrar AuthRepository en Fase 2
-    await Future.delayed(const Duration(seconds: 1));
+
+    final success = await ref.read(authProvider.notifier).signUpProvider(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+          fullName: _nameController.text.trim(),
+          categorySlug: _selectedCategory!.slug,
+          yearsExperience:
+              int.tryParse(_experienceController.text.trim()) ?? 0,
+          bio: _bioController.text.trim(),
+          phone: _phoneController.text.trim().isEmpty
+              ? null
+              : _phoneController.text.trim(),
+        );
+
     if (!mounted) return;
-    setState(() => _isLoading = false);
-    context.go(AppRoutes.providerHome);
+
+    if (success) {
+      context.go(AppRoutes.providerHome);
+    } else {
+      final error = ref.read(authProvider).error;
+      _showError(error ?? 'Error al crear la cuenta');
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final isLoading = ref.watch(authProvider).isLoading;
     final categories = CategoryModel.defaults;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Registro de Prestador'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => context.pop(),
+          onPressed: isLoading ? null : () => context.pop(),
         ),
       ),
       body: SafeArea(
@@ -92,7 +120,7 @@ class _RegisterProviderScreenState
                       SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'Tu perfil será revisado por nuestro equipo antes de aparecer en la app.',
+                          'Tu perfil será revisado antes de aparecer en la app.',
                           style: TextStyle(
                             fontFamily: 'Poppins',
                             fontSize: 12,
@@ -120,21 +148,21 @@ class _RegisterProviderScreenState
                   spacing: 8,
                   runSpacing: 8,
                   children: categories.map((cat) {
-                    final isSelected = _selectedCategory?.slug == cat.slug;
+                    final selected = _selectedCategory?.slug == cat.slug;
                     return GestureDetector(
-                      onTap: () => setState(() => _selectedCategory = cat),
+                      onTap: isLoading
+                          ? null
+                          : () => setState(() => _selectedCategory = cat),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
-                        ),
+                            horizontal: 14, vertical: 10),
                         decoration: BoxDecoration(
-                          color: isSelected
+                          color: selected
                               ? cat.fallbackColor.withAlpha(30)
                               : AppColors.grey100,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: isSelected
+                            color: selected
                                 ? cat.fallbackColor
                                 : AppColors.grey300,
                             width: 1.5,
@@ -143,13 +171,11 @@ class _RegisterProviderScreenState
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
-                              cat.fallbackIcon,
-                              size: 18,
-                              color: isSelected
-                                  ? cat.fallbackColor
-                                  : AppColors.grey600,
-                            ),
+                            Icon(cat.fallbackIcon,
+                                size: 18,
+                                color: selected
+                                    ? cat.fallbackColor
+                                    : AppColors.grey600),
                             const SizedBox(width: 6),
                             Text(
                               cat.name,
@@ -157,7 +183,7 @@ class _RegisterProviderScreenState
                                 fontFamily: 'Poppins',
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
-                                color: isSelected
+                                color: selected
                                     ? cat.fallbackColor
                                     : AppColors.grey700,
                               ),
@@ -174,6 +200,7 @@ class _RegisterProviderScreenState
                   hint: 'Ej: Juan Pérez',
                   controller: _nameController,
                   validator: Validators.fullName,
+                  enabled: !isLoading,
                 ),
                 const SizedBox(height: 16),
                 AppTextField(
@@ -182,14 +209,16 @@ class _RegisterProviderScreenState
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
                   validator: Validators.email,
+                  enabled: !isLoading,
                 ),
                 const SizedBox(height: 16),
                 AppTextField(
-                  label: 'Teléfono',
+                  label: 'Teléfono (opcional)',
                   hint: '+57 300 000 0000',
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
                   validator: Validators.phone,
+                  enabled: !isLoading,
                 ),
                 const SizedBox(height: 16),
                 AppTextField(
@@ -197,8 +226,8 @@ class _RegisterProviderScreenState
                   hint: 'Ej: 5',
                   controller: _experienceController,
                   keyboardType: TextInputType.number,
-                  validator: (v) =>
-                      Validators.required(v, 'La experiencia'),
+                  validator: (v) => Validators.required(v, 'La experiencia'),
+                  enabled: !isLoading,
                 ),
                 const SizedBox(height: 16),
                 AppTextField(
@@ -206,7 +235,9 @@ class _RegisterProviderScreenState
                   hint: 'Cuéntanos qué tipos de servicios ofreces...',
                   controller: _bioController,
                   maxLines: 4,
-                  validator: (v) => Validators.minLength(v, 20, 'La descripción'),
+                  validator: (v) =>
+                      Validators.minLength(v, 20, 'La descripción'),
+                  enabled: !isLoading,
                 ),
                 const SizedBox(height: 16),
                 AppTextField(
@@ -216,12 +247,13 @@ class _RegisterProviderScreenState
                   obscureText: true,
                   textInputAction: TextInputAction.done,
                   validator: Validators.password,
+                  enabled: !isLoading,
                 ),
                 const SizedBox(height: 24),
                 AppButton(
                   label: 'Crear cuenta de prestador',
-                  isLoading: _isLoading,
-                  onPressed: _onRegister,
+                  isLoading: isLoading,
+                  onPressed: isLoading ? null : _onRegister,
                 ),
                 const SizedBox(height: 24),
               ],

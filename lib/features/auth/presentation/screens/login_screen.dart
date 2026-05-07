@@ -7,6 +7,8 @@ import '../../../../app/theme/app_spacing.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
+import '../../../../shared/models/user_model.dart';
+import '../providers/auth_provider.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -19,7 +21,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -30,16 +31,50 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _onLogin() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
-    // TODO: Integrar con AuthRepository en Fase 2
-    await Future.delayed(const Duration(seconds: 1));
+
+    final success = await ref.read(authProvider.notifier).signIn(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+        );
+
     if (!mounted) return;
-    setState(() => _isLoading = false);
-    context.go(AppRoutes.clientHome);
+
+    if (success) {
+      final user = ref.read(currentUserProvider);
+      _redirectByRole(user?.role ?? UserRole.client);
+    } else {
+      final error = ref.read(authProvider).error;
+      _showError(error ?? 'Error al iniciar sesión');
+    }
+  }
+
+  void _redirectByRole(UserRole role) {
+    switch (role) {
+      case UserRole.client:
+        context.go(AppRoutes.clientHome);
+      case UserRole.provider:
+        context.go(AppRoutes.providerHome);
+      case UserRole.admin:
+        context.go(AppRoutes.adminHome);
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final isLoading = ref.watch(authProvider).isLoading;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -84,6 +119,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
                   validator: Validators.email,
+                  enabled: !isLoading,
                   prefixIcon: const Icon(
                     Icons.mail_outline_rounded,
                     color: AppColors.grey500,
@@ -98,6 +134,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   obscureText: true,
                   textInputAction: TextInputAction.done,
                   validator: Validators.password,
+                  enabled: !isLoading,
                   prefixIcon: const Icon(
                     Icons.lock_outline_rounded,
                     color: AppColors.grey500,
@@ -108,7 +145,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
-                    onPressed: () => context.push(AppRoutes.forgotPassword),
+                    onPressed: isLoading
+                        ? null
+                        : () => context.push(AppRoutes.forgotPassword),
                     child: const Text(
                       '¿Olvidaste tu contraseña?',
                       style: TextStyle(
@@ -123,28 +162,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 const SizedBox(height: 16),
                 AppButton(
                   label: 'Iniciar sesión',
-                  isLoading: _isLoading,
-                  onPressed: _onLogin,
+                  isLoading: isLoading,
+                  onPressed: isLoading ? null : _onLogin,
                 ),
-                const SizedBox(height: 24),
-                Row(
-                  children: [
-                    const Expanded(child: Divider(color: AppColors.grey300)),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Text(
-                        'o',
-                        style: TextStyle(
-                          color: AppColors.grey500,
-                          fontFamily: 'Poppins',
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                    const Expanded(child: Divider(color: AppColors.grey300)),
-                  ],
-                ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 32),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -157,7 +178,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                     ),
                     GestureDetector(
-                      onTap: () => context.go(AppRoutes.accountType),
+                      onTap: isLoading
+                          ? null
+                          : () => context.go(AppRoutes.accountType),
                       child: const Text(
                         'Regístrate',
                         style: TextStyle(

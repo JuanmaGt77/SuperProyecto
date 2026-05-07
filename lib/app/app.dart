@@ -22,7 +22,7 @@ class ServiLinkApp extends ConsumerWidget {
       title: 'ServiLink',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
-      routerConfig: AppRouter.buildRouter(),
+      routerConfig: AppRouter.buildRouter(ref),
     );
   }
 }

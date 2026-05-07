@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../app/router/app_routes.dart';
 import '../../../../app/theme/app_colors.dart';
+import '../../../../shared/models/user_model.dart';
+import '../providers/auth_provider.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -32,14 +34,43 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
     );
 
-    _navigate();
+    // Esperar animación + verificar sesión
+    Future.delayed(const Duration(milliseconds: 2000), _checkSession);
   }
 
-  Future<void> _navigate() async {
-    await Future.delayed(const Duration(milliseconds: 2200));
+  Future<void> _checkSession() async {
     if (!mounted) return;
-    // TODO: Verificar sesión activa con Supabase y redirigir según rol
-    context.go(AppRoutes.onboarding);
+
+    final authState = ref.read(authProvider);
+
+    // Si ya tiene sesión activa, esperar que el stream la emita
+    if (authState.status == AuthStatus.loading) {
+      // Intentar fetch del usuario actual directamente
+      final repo = ref.read(authRepositoryProvider);
+      final result = await repo.fetchCurrentUser();
+
+      if (!mounted) return;
+
+      result.fold(
+        (_) => context.go(AppRoutes.onboarding),
+        (user) => _redirectByRole(user.role),
+      );
+    } else if (authState.isAuthenticated && authState.user != null) {
+      _redirectByRole(authState.user!.role);
+    } else {
+      context.go(AppRoutes.onboarding);
+    }
+  }
+
+  void _redirectByRole(UserRole role) {
+    switch (role) {
+      case UserRole.client:
+        context.go(AppRoutes.clientHome);
+      case UserRole.provider:
+        context.go(AppRoutes.providerHome);
+      case UserRole.admin:
+        context.go(AppRoutes.adminHome);
+    }
   }
 
   @override
@@ -52,9 +83,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.primaryGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
         child: Center(
           child: FadeTransition(
             opacity: _fadeAnimation,
@@ -100,7 +129,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                     style: TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 14,
-                      fontWeight: FontWeight.w400,
                       color: AppColors.white.withAlpha(220),
                     ),
                   ),
