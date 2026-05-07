@@ -11,6 +11,8 @@ import '../../features/auth/presentation/screens/splash_screen.dart';
 import '../../features/client/home/presentation/screens/client_home_screen.dart';
 import '../../features/onboarding/presentation/screens/onboarding_screen.dart';
 import '../../features/provider/home/presentation/screens/provider_home_screen.dart';
+import '../../features/client/providers/presentation/screens/provider_detail_screen.dart';
+import '../../features/client/providers/presentation/screens/providers_list_screen.dart';
 import '../../features/shared/placeholder_screen.dart';
 import '../../features/shared/profile/presentation/screens/profile_screen.dart';
 import '../../features/shared/profile/presentation/screens/profile_edit_screen.dart';
@@ -115,11 +117,19 @@ class AppRouter {
         ),
         GoRoute(
           path: '/client/categories/:slug',
-          builder: (_, st) => PlaceholderScreen(
-            title: 'Prestadores — ${st.pathParameters['slug']}',
-            subtitle: 'Lista filtrada por categoría — Fase 4.',
-            icon: Icons.list_alt_rounded,
+          builder: (_, st) => ProvidersListScreen(
+            categorySlug: st.pathParameters['slug'],
           ),
+        ),
+        GoRoute(
+          path: '/client/providers/:id',
+          builder: (_, st) => ProviderDetailScreen(
+            providerId: st.pathParameters['id']!,
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.clientCategories,
+          builder: (_, __) => const ProvidersListScreen(),
         ),
         GoRoute(
           path: AppRoutes.clientMap,

@@ -6,6 +6,7 @@ import '../../../../../app/theme/app_colors.dart';
 import '../../../../../app/theme/app_spacing.dart';
 import '../../../../../core/widgets/app_avatar.dart';
 import '../../../../../features/auth/presentation/providers/auth_provider.dart';
+import '../../../../../features/client/providers/presentation/providers/providers_notifier.dart';
 import '../../../../../shared/models/category_model.dart';
 import '../widgets/category_grid.dart';
 import '../widgets/provider_card.dart';
@@ -21,6 +22,14 @@ class _ClientHomeScreenState extends ConsumerState<ClientHomeScreen> {
   int _navIndex = 0;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(nearbyProvidersProvider.notifier).load();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -31,7 +40,10 @@ class _ClientHomeScreenState extends ConsumerState<ClientHomeScreen> {
             _buildSearchBar(),
             _buildCategories(),
             _buildBanner(),
-            _buildSectionTitle('Prestadores cercanos', onSeeAll: () {}),
+            _buildSectionTitle(
+              'Prestadores cercanos',
+              onSeeAll: () => context.push(AppRoutes.clientCategories),
+            ),
             _buildProvidersList(),
             const SliverToBoxAdapter(child: SizedBox(height: 100)),
           ],
@@ -122,29 +134,32 @@ class _ClientHomeScreenState extends ConsumerState<ClientHomeScreen> {
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.grey200),
-          ),
-          child: const Row(
-            children: [
-              Icon(Icons.search_rounded, color: AppColors.grey500),
-              SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  '¿Qué servicio necesitas hoy?',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 14,
-                    color: AppColors.grey500,
+        child: GestureDetector(
+          onTap: () => context.push(AppRoutes.clientCategories),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.grey200),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.search_rounded, color: AppColors.grey500),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '¿Qué servicio necesitas hoy?',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 14,
+                      color: AppColors.grey500,
+                    ),
                   ),
                 ),
-              ),
-              Icon(Icons.tune_rounded, color: AppColors.grey500, size: 20),
-            ],
+                Icon(Icons.tune_rounded, color: AppColors.grey500, size: 20),
+              ],
+            ),
           ),
         ),
       ),
@@ -290,28 +305,59 @@ class _ClientHomeScreenState extends ConsumerState<ClientHomeScreen> {
   }
 
   Widget _buildProvidersList() {
-    final mock = [
-      ('Carlos Ramírez', 'Mecánico', 4.8, 124, 1.2, true, true),
-      ('María González', 'Electricista', 4.9, 87, 2.5, true, true),
-      ('Pedro Sánchez', 'Plomero', 4.7, 56, 3.1, false, false),
-      ('Luis Torres', 'Albañil', 4.6, 41, 4.8, true, false),
-    ];
-    return SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (context, i) => Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-          child: ProviderCard(
-            name: mock[i].$1,
-            category: mock[i].$2,
-            rating: mock[i].$3,
-            reviews: mock[i].$4,
-            distanceKm: mock[i].$5,
-            isAvailable: mock[i].$6,
-            isVerified: mock[i].$7,
-            onTap: () {},
+    final state = ref.watch(nearbyProvidersProvider);
+
+    if (state.isLoading) {
+      return const SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 32),
+          child: Center(
+            child: CircularProgressIndicator(color: AppColors.primary),
           ),
         ),
-        childCount: mock.length,
+      );
+    }
+
+    final providers = state.filtered.take(4).toList();
+
+    if (providers.isEmpty && state.error == null) {
+      return const SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(20, 8, 20, 16),
+          child: Center(
+            child: Text(
+              'No hay prestadores disponibles por ahora',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 13,
+                color: AppColors.grey500,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (context, i) {
+          final p = providers[i];
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+            child: ProviderCard(
+              name: p.fullName ?? 'Prestador',
+              category: p.primaryCategoryName,
+              rating: p.avgRating,
+              reviews: p.totalReviews,
+              distanceKm: p.distanceKm ?? 0,
+              isAvailable: p.isAvailable,
+              isVerified: p.isVerified,
+              avatarUrl: p.avatarUrl,
+              onTap: () => context.push('/client/providers/${p.id}'),
+            ),
+          );
+        },
+        childCount: providers.length,
       ),
     );
   }
