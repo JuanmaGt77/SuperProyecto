@@ -26,15 +26,15 @@ class AuthRemoteDatasource {
         password: password,
       );
       if (response.user == null) {
-        throw const AuthException('No se pudo iniciar sesión');
+        throw const AppAuthException('No se pudo iniciar sesión');
       }
       return _fetchUserProfile(response.user!.id);
-    } on AuthException {
+    } on AppAuthException {
       rethrow;
     } on AuthApiException catch (e) {
-      throw AuthException(_mapAuthError(e.message));
+      throw AppAuthException(_mapAuthError(e.message));
     } catch (e) {
-      throw AuthException('Error al iniciar sesión: $e');
+      throw AppAuthException('Error al iniciar sesión: $e');
     }
   }
 
@@ -55,7 +55,7 @@ class AuthRemoteDatasource {
         },
       );
       if (response.user == null) {
-        throw const AuthException('No se pudo crear la cuenta');
+        throw const AppAuthException('No se pudo crear la cuenta');
       }
       // Esperar brevemente para que el trigger handle_new_user se ejecute
       await Future.delayed(const Duration(milliseconds: 800));
@@ -74,12 +74,12 @@ class AuthRemoteDatasource {
       });
 
       return _fetchUserProfile(response.user!.id);
-    } on AuthException {
+    } on AppAuthException {
       rethrow;
     } on AuthApiException catch (e) {
-      throw AuthException(_mapAuthError(e.message));
+      throw AppAuthException(_mapAuthError(e.message));
     } catch (e) {
-      throw AuthException('Error al registrarse: $e');
+      throw AppAuthException('Error al registrarse: $e');
     }
   }
 
@@ -103,7 +103,7 @@ class AuthRemoteDatasource {
         },
       );
       if (response.user == null) {
-        throw const AuthException('No se pudo crear la cuenta');
+        throw const AppAuthException('No se pudo crear la cuenta');
       }
 
       await Future.delayed(const Duration(milliseconds: 800));
@@ -143,12 +143,12 @@ class AuthRemoteDatasource {
       }
 
       return _fetchUserProfile(response.user!.id);
-    } on AuthException {
+    } on AppAuthException {
       rethrow;
     } on AuthApiException catch (e) {
-      throw AuthException(_mapAuthError(e.message));
+      throw AppAuthException(_mapAuthError(e.message));
     } catch (e) {
-      throw AuthException('Error al registrarse como prestador: $e');
+      throw AppAuthException('Error al registrarse como prestador: $e');
     }
   }
 
@@ -156,7 +156,7 @@ class AuthRemoteDatasource {
     try {
       await _client.auth.signOut();
     } catch (e) {
-      throw AuthException('Error al cerrar sesión: $e');
+      throw AppAuthException('Error al cerrar sesión: $e');
     }
   }
 
@@ -164,15 +164,15 @@ class AuthRemoteDatasource {
     try {
       await _client.auth.resetPasswordForEmail(email);
     } on AuthApiException catch (e) {
-      throw AuthException(_mapAuthError(e.message));
+      throw AppAuthException(_mapAuthError(e.message));
     } catch (e) {
-      throw AuthException('Error al enviar el correo: $e');
+      throw AppAuthException('Error al enviar el correo: $e');
     }
   }
 
   Future<UserModel> fetchCurrentUser() async {
     final userId = SupabaseConfig.currentUserId;
-    if (userId == null) throw const AuthException('Sin sesión activa');
+    if (userId == null) throw const AppAuthException('Sin sesión activa');
     return _fetchUserProfile(userId);
   }
 

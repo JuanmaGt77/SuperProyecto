@@ -4,9 +4,9 @@ class ServerException implements Exception {
   const ServerException(this.message, {this.statusCode});
 }
 
-class AuthException implements Exception {
+class AppAuthException implements Exception {
   final String message;
-  const AuthException(this.message);
+  const AppAuthException(this.message);
 }
 
 class NetworkException implements Exception {

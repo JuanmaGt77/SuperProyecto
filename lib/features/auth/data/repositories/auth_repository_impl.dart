@@ -24,7 +24,7 @@ class AuthRepositoryImpl implements AuthRepository {
     try {
       final user = await _datasource.signIn(email: email, password: password);
       return Right(user);
-    } on AuthException catch (e) {
+    } on AppAuthException catch (e) {
       return Left(AuthFailure(e.message));
     } catch (e) {
       return Left(UnexpectedFailure(e.toString()));
@@ -46,7 +46,7 @@ class AuthRepositoryImpl implements AuthRepository {
         phone: phone,
       );
       return Right(user);
-    } on AuthException catch (e) {
+    } on AppAuthException catch (e) {
       return Left(AuthFailure(e.message));
     } catch (e) {
       return Left(UnexpectedFailure(e.toString()));
@@ -74,7 +74,7 @@ class AuthRepositoryImpl implements AuthRepository {
         phone: phone,
       );
       return Right(user);
-    } on AuthException catch (e) {
+    } on AppAuthException catch (e) {
       return Left(AuthFailure(e.message));
     } catch (e) {
       return Left(UnexpectedFailure(e.toString()));
@@ -86,7 +86,7 @@ class AuthRepositoryImpl implements AuthRepository {
     try {
       await _datasource.signOut();
       return const Right(null);
-    } on AuthException catch (e) {
+    } on AppAuthException catch (e) {
       return Left(AuthFailure(e.message));
     } catch (e) {
       return Left(UnexpectedFailure(e.toString()));
@@ -100,7 +100,7 @@ class AuthRepositoryImpl implements AuthRepository {
     try {
       await _datasource.sendPasswordReset(email: email);
       return const Right(null);
-    } on AuthException catch (e) {
+    } on AppAuthException catch (e) {
       return Left(AuthFailure(e.message));
     } catch (e) {
       return Left(UnexpectedFailure(e.toString()));
@@ -112,7 +112,7 @@ class AuthRepositoryImpl implements AuthRepository {
     try {
       final user = await _datasource.fetchCurrentUser();
       return Right(user);
-    } on AuthException catch (e) {
+    } on AppAuthException catch (e) {
       return Left(AuthFailure(e.message));
     } on ServerException catch (e) {
       return Left(ServerFailure(e.message));
