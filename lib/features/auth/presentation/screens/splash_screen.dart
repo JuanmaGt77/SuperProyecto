@@ -41,21 +41,16 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   Future<void> _checkSession() async {
     if (!mounted) return;
 
+    // If still loading, resolve state via AuthNotifier.initialize()
+    // (has a 6s timeout — so we never hang forever)
+    if (ref.read(authProvider).status == AuthStatus.loading) {
+      await ref.read(authProvider.notifier).initialize();
+    }
+
+    if (!mounted) return;
+
     final authState = ref.read(authProvider);
-
-    // Si ya tiene sesión activa, esperar que el stream la emita
-    if (authState.status == AuthStatus.loading) {
-      // Intentar fetch del usuario actual directamente
-      final repo = ref.read(authRepositoryProvider);
-      final result = await repo.fetchCurrentUser();
-
-      if (!mounted) return;
-
-      result.fold(
-        (_) => context.go(AppRoutes.onboarding),
-        (user) => _redirectByRole(user.role),
-      );
-    } else if (authState.isAuthenticated && authState.user != null) {
+    if (authState.isAuthenticated && authState.user != null) {
       _redirectByRole(authState.user!.role);
     } else {
       context.go(AppRoutes.onboarding);

@@ -1,4 +1,6 @@
+import 'package:dartz/dartz.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/errors/failures.dart';
 import '../../../../shared/models/user_model.dart';
 import '../../data/repositories/auth_repository_impl.dart';
 import '../../domain/repositories/auth_repository.dart';
@@ -47,13 +49,31 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   void _listenAuthChanges() {
-    _repo.authStateChanges.listen((user) {
-      if (user != null) {
-        state = AuthState(status: AuthStatus.authenticated, user: user);
-      } else {
+    _repo.authStateChanges.listen(
+      (user) {
+        if (user != null) {
+          state = AuthState(status: AuthStatus.authenticated, user: user);
+        } else {
+          state = const AuthState(status: AuthStatus.unauthenticated);
+        }
+      },
+      onError: (_) {
         state = const AuthState(status: AuthStatus.unauthenticated);
-      }
-    });
+      },
+    );
+  }
+
+  // Called by SplashScreen to resolve the initial auth state
+  Future<void> initialize() async {
+    if (state.status != AuthStatus.loading) return;
+    final result = await _repo.fetchCurrentUser().timeout(
+      const Duration(seconds: 6),
+      onTimeout: () => const Left(UnexpectedFailure('Timeout')),
+    );
+    result.fold(
+      (_) => state = const AuthState(status: AuthStatus.unauthenticated),
+      (user) => state = AuthState(status: AuthStatus.authenticated, user: user),
+    );
   }
 
   Future<bool> signIn({
