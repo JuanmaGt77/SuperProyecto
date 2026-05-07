@@ -18,12 +18,12 @@ class EnvConfig {
 
   static const String cloudinaryCloudName = String.fromEnvironment(
     'CLOUDINARY_CLOUD_NAME',
-    defaultValue: 'YOUR_CLOUD_NAME',
+    defaultValue: 'dvaiepxub',
   );
 
   static const String cloudinaryUploadPreset = String.fromEnvironment(
     'CLOUDINARY_UPLOAD_PRESET',
-    defaultValue: 'servilink_unsigned',
+    defaultValue: 'proyect_avatars',
   );
 
   // Para cargas firmadas — este valor solo existe en Edge Functions, no en Flutter

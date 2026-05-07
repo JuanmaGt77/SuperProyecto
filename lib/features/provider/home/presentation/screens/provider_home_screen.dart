@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../../../app/router/app_routes.dart';
 import '../../../../../app/theme/app_colors.dart';
 import '../../../../../core/widgets/app_avatar.dart';
 import '../../../../../core/widgets/app_badge.dart';
@@ -274,7 +276,10 @@ class _ProviderHomeScreenState extends ConsumerState<ProviderHomeScreen> {
         top: false,
         child: BottomNavigationBar(
           currentIndex: _navIndex,
-          onTap: (i) => setState(() => _navIndex = i),
+          onTap: (i) {
+            if (i == 4) { context.push(AppRoutes.profile); return; }
+            setState(() => _navIndex = i);
+          },
           backgroundColor: AppColors.surface,
           elevation: 0,
           type: BottomNavigationBarType.fixed,

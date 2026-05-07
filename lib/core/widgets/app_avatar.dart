@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../app/theme/app_colors.dart';
@@ -5,6 +6,7 @@ import '../../app/theme/app_colors.dart';
 class AppAvatar extends StatelessWidget {
   final String? imageUrl;
   final String? name;
+  final File? localFile;
   final double size;
   final bool isOnline;
   final bool showStatus;
@@ -15,6 +17,7 @@ class AppAvatar extends StatelessWidget {
     super.key,
     this.imageUrl,
     this.name,
+    this.localFile,
     this.size = 44,
     this.isOnline = false,
     this.showStatus = false,
@@ -40,6 +43,11 @@ class AppAvatar extends StatelessWidget {
   }
 
   Widget _buildAvatar() {
+    if (localFile != null) {
+      return ClipOval(
+        child: Image.file(localFile!, width: size, height: size, fit: BoxFit.cover),
+      );
+    }
     if (imageUrl != null && imageUrl!.isNotEmpty) {
       return ClipOval(
         child: CachedNetworkImage(

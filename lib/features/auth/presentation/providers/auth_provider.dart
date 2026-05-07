@@ -149,6 +149,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
     return result.fold((_) => false, (_) => true);
   }
 
+  Future<void> refreshUser() async {
+    final result = await _repo.fetchCurrentUser();
+    result.fold(
+      (_) {},
+      (user) => state = state.copyWith(user: user),
+    );
+  }
+
   void clearError() {
     state = state.copyWith(error: null);
   }

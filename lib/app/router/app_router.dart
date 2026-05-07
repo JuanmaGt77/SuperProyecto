@@ -12,6 +12,8 @@ import '../../features/client/home/presentation/screens/client_home_screen.dart'
 import '../../features/onboarding/presentation/screens/onboarding_screen.dart';
 import '../../features/provider/home/presentation/screens/provider_home_screen.dart';
 import '../../features/shared/placeholder_screen.dart';
+import '../../features/shared/profile/presentation/screens/profile_screen.dart';
+import '../../features/shared/profile/presentation/screens/profile_edit_screen.dart';
 import '../../shared/models/user_model.dart';
 import 'app_routes.dart';
 
@@ -173,6 +175,16 @@ class AppRouter {
         ),
 
         // ── Compartidas ──────────────────────────────────────────────────────
+        GoRoute(
+          path: AppRoutes.profile,
+          builder: (_, __) => const ProfileScreen(),
+          routes: [
+            GoRoute(
+              path: 'edit',
+              builder: (_, __) => const ProfileEditScreen(),
+            ),
+          ],
+        ),
         GoRoute(
           path: AppRoutes.notifications,
           builder: (_, __) => const PlaceholderScreen(

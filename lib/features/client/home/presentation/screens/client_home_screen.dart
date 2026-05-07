@@ -332,7 +332,13 @@ class _ClientHomeScreenState extends ConsumerState<ClientHomeScreen> {
         top: false,
         child: BottomNavigationBar(
           currentIndex: _navIndex,
-          onTap: (i) => setState(() => _navIndex = i),
+          onTap: (i) {
+            if (i == 4) { context.push(AppRoutes.profile); return; }
+            if (i == 1) { context.push(AppRoutes.clientMap); return; }
+            if (i == 2) { context.push(AppRoutes.clientChats); return; }
+            if (i == 3) { context.push(AppRoutes.clientHistory); return; }
+            setState(() => _navIndex = i);
+          },
           backgroundColor: AppColors.surface,
           elevation: 0,
           type: BottomNavigationBarType.fixed,
