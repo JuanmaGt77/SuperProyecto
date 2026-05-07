@@ -58,7 +58,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
         }
       },
       onError: (_) {
-        state = const AuthState(status: AuthStatus.unauthenticated);
+        // Only reset if we don't already have an authenticated user.
+        // Avoids undoing a successful signIn/signUp when the profile
+        // fetch in asyncMap races against Supabase DB triggers.
+        if (!state.isAuthenticated) {
+          state = const AuthState(status: AuthStatus.unauthenticated);
+        }
       },
     );
   }
