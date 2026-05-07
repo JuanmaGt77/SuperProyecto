@@ -51,8 +51,10 @@ class AppRouter {
         // Splash siempre pasa — maneja su propia lógica
         if (location == AppRoutes.splash) return null;
 
-        // Si está cargando, dejar en splash
-        if (authState.isLoading) return AppRoutes.splash;
+        // While loading, stay on the current screen — don't redirect to splash.
+        // Splash handles initial load itself; mid-flow loading (signIn/signUp)
+        // should not interrupt the current screen.
+        if (authState.isLoading) return null;
 
         // Si no está autenticado y va a ruta privada → login
         if (!authState.isAuthenticated && !isPublic) {
