@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -37,12 +38,18 @@ class _RegisterClientScreenState extends ConsumerState<RegisterClientScreen> {
   }
 
   Future<void> _onRegister() async {
-    if (!_formKey.currentState!.validate()) return;
+    debugPrint('[Register] _onRegister called');
+    if (!_formKey.currentState!.validate()) {
+      debugPrint('[Register] form validation FAILED');
+      return;
+    }
     if (!_acceptTerms) {
+      debugPrint('[Register] terms not accepted');
       _showError('Debes aceptar los términos y condiciones');
       return;
     }
 
+    debugPrint('[Register] calling signUpClient...');
     final success = await ref.read(authProvider.notifier).signUpClient(
           email: _emailController.text.trim(),
           password: _passwordController.text,
@@ -51,13 +58,16 @@ class _RegisterClientScreenState extends ConsumerState<RegisterClientScreen> {
               ? null
               : _phoneController.text.trim(),
         );
+    debugPrint('[Register] signUpClient returned: $success');
 
     if (!mounted) return;
 
     if (success) {
+      debugPrint('[Register] navigating to clientHome');
       context.go(AppRoutes.clientHome);
     } else {
       final error = ref.read(authProvider).error;
+      debugPrint('[Register] error: $error');
       _showError(error ?? 'Error al crear la cuenta');
     }
   }
