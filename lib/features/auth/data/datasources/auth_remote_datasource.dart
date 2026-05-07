@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/errors/exceptions.dart';
 import '../../../../core/supabase/supabase_config.dart';
@@ -57,28 +58,36 @@ class AuthRemoteDatasource {
       if (response.user == null) {
         throw const AppAuthException('No se pudo crear la cuenta');
       }
-      // Esperar brevemente para que el trigger handle_new_user se ejecute
-      await Future.delayed(const Duration(milliseconds: 800));
+      final userId = response.user!.id;
+      debugPrint('[Auth] signUpClient: user created $userId');
 
-      // Actualizar phone si fue proporcionado
+      // Wait for handle_new_user trigger
+      await Future.delayed(const Duration(milliseconds: 1500));
+
+      // Try to update phone — non-critical, don't fail if it errors
       if (phone != null && phone.isNotEmpty) {
-        await _client
-            .from('users')
-            .update({'phone': phone})
-            .eq('id', response.user!.id);
+        try {
+          await _client.from('users').update({'phone': phone}).eq('id', userId);
+        } catch (e) {
+          debugPrint('[Auth] signUpClient: phone update failed (non-fatal): $e');
+        }
       }
 
-      // Crear client_profile
-      await _client.from('client_profiles').upsert({
-        'user_id': response.user!.id,
-      });
+      // Try to create client_profile — non-critical
+      try {
+        await _client.from('client_profiles').upsert({'user_id': userId});
+        debugPrint('[Auth] signUpClient: client_profile created');
+      } catch (e) {
+        debugPrint('[Auth] signUpClient: client_profile failed (non-fatal): $e');
+      }
 
-      return _fetchUserProfile(response.user!.id);
+      return _fetchUserProfileWithRetry(userId);
     } on AppAuthException {
       rethrow;
     } on AuthApiException catch (e) {
       throw AppAuthException(_mapAuthError(e.message));
     } catch (e) {
+      debugPrint('[Auth] signUpClient ERROR: $e');
       throw AppAuthException('Error al registrarse: $e');
     }
   }
@@ -106,48 +115,62 @@ class AuthRemoteDatasource {
         throw const AppAuthException('No se pudo crear la cuenta');
       }
 
-      await Future.delayed(const Duration(milliseconds: 800));
+      final userId = response.user!.id;
+      debugPrint('[Auth] signUpProvider: user created $userId');
 
-      // Actualizar role en users (el trigger crea con role del metadata)
-      await _client.from('users').update({
-        'role': 'provider',
-        if (phone != null) 'phone': phone,
-      }).eq('id', response.user!.id);
+      await Future.delayed(const Duration(milliseconds: 1500));
 
-      // Crear provider_profile
-      final profileRes = await _client
-          .from('provider_profiles')
-          .insert({
-            'user_id': response.user!.id,
-            'bio': bio,
-            'years_experience': yearsExperience,
-          })
-          .select()
-          .single();
-
-      final providerId = profileRes['id'] as String;
-
-      // Buscar la categoría por slug
-      final categoryRes = await _client
-          .from('service_categories')
-          .select('id')
-          .eq('slug', categorySlug)
-          .maybeSingle();
-
-      if (categoryRes != null) {
-        await _client.from('provider_categories').insert({
-          'provider_id': providerId,
-          'category_id': categoryRes['id'],
-          'is_primary': true,
-        });
+      // Update role — non-critical
+      try {
+        await _client.from('users').update({
+          'role': 'provider',
+          if (phone != null && phone.isNotEmpty) 'phone': phone,
+        }).eq('id', userId);
+      } catch (e) {
+        debugPrint('[Auth] signUpProvider: role update failed (non-fatal): $e');
       }
 
-      return _fetchUserProfile(response.user!.id);
+      // Create provider_profile — critical for provider flow
+      String? providerId;
+      try {
+        final profileRes = await _client
+            .from('provider_profiles')
+            .insert({'user_id': userId, 'bio': bio, 'years_experience': yearsExperience})
+            .select()
+            .single();
+        providerId = profileRes['id'] as String;
+        debugPrint('[Auth] signUpProvider: provider_profile created $providerId');
+      } catch (e) {
+        debugPrint('[Auth] signUpProvider: provider_profile failed (non-fatal): $e');
+      }
+
+      // Link category — non-critical
+      if (providerId != null) {
+        try {
+          final categoryRes = await _client
+              .from('service_categories')
+              .select('id')
+              .eq('slug', categorySlug)
+              .maybeSingle();
+          if (categoryRes != null) {
+            await _client.from('provider_categories').insert({
+              'provider_id': providerId,
+              'category_id': categoryRes['id'],
+              'is_primary': true,
+            });
+          }
+        } catch (e) {
+          debugPrint('[Auth] signUpProvider: category link failed (non-fatal): $e');
+        }
+      }
+
+      return _fetchUserProfileWithRetry(userId);
     } on AppAuthException {
       rethrow;
     } on AuthApiException catch (e) {
       throw AppAuthException(_mapAuthError(e.message));
     } catch (e) {
+      debugPrint('[Auth] signUpProvider ERROR: $e');
       throw AppAuthException('Error al registrarse como prestador: $e');
     }
   }
@@ -176,15 +199,27 @@ class AuthRemoteDatasource {
     return _fetchUserProfile(userId);
   }
 
+  Future<UserModel> _fetchUserProfileWithRetry(String userId) async {
+    // Retry up to 4 times with 1s between attempts (trigger may be slow)
+    for (var attempt = 1; attempt <= 4; attempt++) {
+      try {
+        final data = await _client.from('users').select().eq('id', userId).single();
+        debugPrint('[Auth] fetchUserProfile: found on attempt $attempt');
+        return UserModel.fromJson(data);
+      } catch (e) {
+        debugPrint('[Auth] fetchUserProfile attempt $attempt failed: $e');
+        if (attempt < 4) await Future.delayed(const Duration(milliseconds: 1000));
+      }
+    }
+    throw const ServerException('No se pudo obtener el perfil. Verifica que el schema esté aplicado en Supabase.');
+  }
+
   Future<UserModel> _fetchUserProfile(String userId) async {
     try {
-      final data = await _client
-          .from('users')
-          .select()
-          .eq('id', userId)
-          .single();
+      final data = await _client.from('users').select().eq('id', userId).single();
       return UserModel.fromJson(data);
     } catch (e) {
+      debugPrint('[Auth] _fetchUserProfile ERROR for $userId: $e');
       throw ServerException('No se pudo obtener el perfil del usuario: $e');
     }
   }
