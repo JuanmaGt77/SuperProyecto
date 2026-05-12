@@ -13,8 +13,30 @@ class AuthRemoteDatasource {
     return _client.auth.onAuthStateChange.asyncMap((event) async {
       final user = event.session?.user;
       if (user == null) return null;
-      return _fetchUserProfile(user.id);
+      try {
+        return await _fetchUserProfile(user.id);
+      } catch (_) {
+        // DB trigger hasn't run yet — build model from auth metadata
+        return _userModelFromAuthUser(user);
+      }
     });
+  }
+
+  UserModel _userModelFromAuthUser(User user) {
+    final meta = user.userMetadata ?? {};
+    final now = DateTime.now();
+    return UserModel(
+      id: user.id,
+      email: user.email ?? '',
+      fullName: meta['full_name'] as String? ??
+          (user.email?.split('@').first ?? 'Usuario'),
+      phone: meta['phone'] as String?,
+      role: UserRoleExt.fromString(meta['role'] as String? ?? 'client'),
+      isActive: true,
+      isBlocked: false,
+      createdAt: now,
+      updatedAt: now,
+    );
   }
 
   Future<UserModel> signIn({
@@ -61,27 +83,11 @@ class AuthRemoteDatasource {
       final userId = response.user!.id;
       debugPrint('[Auth] signUpClient: user created $userId');
 
-      // Wait for handle_new_user trigger
-      await Future.delayed(const Duration(milliseconds: 1500));
+      // Return immediately from auth metadata — no need to wait for the
+      // handle_new_user DB trigger. Profile tables are set up in background.
+      _setupClientProfileInBackground(userId, phone);
 
-      // Try to update phone — non-critical, don't fail if it errors
-      if (phone != null && phone.isNotEmpty) {
-        try {
-          await _client.from('users').update({'phone': phone}).eq('id', userId);
-        } catch (e) {
-          debugPrint('[Auth] signUpClient: phone update failed (non-fatal): $e');
-        }
-      }
-
-      // Try to create client_profile — non-critical
-      try {
-        await _client.from('client_profiles').upsert({'user_id': userId});
-        debugPrint('[Auth] signUpClient: client_profile created');
-      } catch (e) {
-        debugPrint('[Auth] signUpClient: client_profile failed (non-fatal): $e');
-      }
-
-      return _fetchUserProfileWithRetry(userId);
+      return _userModelFromAuthUser(response.user!);
     } on AppAuthException {
       rethrow;
     } on AuthApiException catch (e) {
@@ -90,6 +96,26 @@ class AuthRemoteDatasource {
       debugPrint('[Auth] signUpClient ERROR: $e');
       throw AppAuthException('Error al registrarse: $e');
     }
+  }
+
+  void _setupClientProfileInBackground(String userId, String? phone) {
+    Future.microtask(() async {
+      // Give the handle_new_user trigger time to create the users row
+      await Future.delayed(const Duration(milliseconds: 2000));
+      if (phone != null && phone.isNotEmpty) {
+        try {
+          await _client.from('users').update({'phone': phone}).eq('id', userId);
+        } catch (e) {
+          debugPrint('[Auth] bg phone update failed: $e');
+        }
+      }
+      try {
+        await _client.from('client_profiles').upsert({'user_id': userId});
+        debugPrint('[Auth] bg client_profile created');
+      } catch (e) {
+        debugPrint('[Auth] bg client_profile failed: $e');
+      }
+    });
   }
 
   Future<UserModel> signUpProvider({
@@ -118,19 +144,45 @@ class AuthRemoteDatasource {
       final userId = response.user!.id;
       debugPrint('[Auth] signUpProvider: user created $userId');
 
-      await Future.delayed(const Duration(milliseconds: 1500));
+      // Return immediately; set up provider profile tables in background.
+      _setupProviderProfileInBackground(
+        userId: userId,
+        phone: phone,
+        bio: bio,
+        yearsExperience: yearsExperience,
+        categorySlug: categorySlug,
+      );
 
-      // Update role — non-critical
+      return _userModelFromAuthUser(response.user!);
+    } on AppAuthException {
+      rethrow;
+    } on AuthApiException catch (e) {
+      throw AppAuthException(_mapAuthError(e.message));
+    } catch (e) {
+      debugPrint('[Auth] signUpProvider ERROR: $e');
+      throw AppAuthException('Error al registrarse como prestador: $e');
+    }
+  }
+
+  void _setupProviderProfileInBackground({
+    required String userId,
+    String? phone,
+    required String bio,
+    required int yearsExperience,
+    required String categorySlug,
+  }) {
+    Future.microtask(() async {
+      await Future.delayed(const Duration(milliseconds: 2000));
+
       try {
         await _client.from('users').update({
           'role': 'provider',
           if (phone != null && phone.isNotEmpty) 'phone': phone,
         }).eq('id', userId);
       } catch (e) {
-        debugPrint('[Auth] signUpProvider: role update failed (non-fatal): $e');
+        debugPrint('[Auth] bg provider role update failed: $e');
       }
 
-      // Create provider_profile — critical for provider flow
       String? providerId;
       try {
         final profileRes = await _client
@@ -139,12 +191,11 @@ class AuthRemoteDatasource {
             .select()
             .single();
         providerId = profileRes['id'] as String;
-        debugPrint('[Auth] signUpProvider: provider_profile created $providerId');
+        debugPrint('[Auth] bg provider_profile created $providerId');
       } catch (e) {
-        debugPrint('[Auth] signUpProvider: provider_profile failed (non-fatal): $e');
+        debugPrint('[Auth] bg provider_profile failed: $e');
       }
 
-      // Link category — non-critical
       if (providerId != null) {
         try {
           final categoryRes = await _client
@@ -160,19 +211,10 @@ class AuthRemoteDatasource {
             });
           }
         } catch (e) {
-          debugPrint('[Auth] signUpProvider: category link failed (non-fatal): $e');
+          debugPrint('[Auth] bg category link failed: $e');
         }
       }
-
-      return _fetchUserProfileWithRetry(userId);
-    } on AppAuthException {
-      rethrow;
-    } on AuthApiException catch (e) {
-      throw AppAuthException(_mapAuthError(e.message));
-    } catch (e) {
-      debugPrint('[Auth] signUpProvider ERROR: $e');
-      throw AppAuthException('Error al registrarse como prestador: $e');
-    }
+    });
   }
 
   Future<void> signOut() async {
@@ -196,22 +238,13 @@ class AuthRemoteDatasource {
   Future<UserModel> fetchCurrentUser() async {
     final userId = SupabaseConfig.currentUserId;
     if (userId == null) throw const AppAuthException('Sin sesión activa');
-    return _fetchUserProfile(userId);
-  }
-
-  Future<UserModel> _fetchUserProfileWithRetry(String userId) async {
-    // Retry up to 4 times with 1s between attempts (trigger may be slow)
-    for (var attempt = 1; attempt <= 4; attempt++) {
-      try {
-        final data = await _client.from('users').select().eq('id', userId).single();
-        debugPrint('[Auth] fetchUserProfile: found on attempt $attempt');
-        return UserModel.fromJson(data);
-      } catch (e) {
-        debugPrint('[Auth] fetchUserProfile attempt $attempt failed: $e');
-        if (attempt < 4) await Future.delayed(const Duration(milliseconds: 1000));
-      }
+    try {
+      return await _fetchUserProfile(userId);
+    } catch (_) {
+      final authUser = _client.auth.currentUser;
+      if (authUser != null) return _userModelFromAuthUser(authUser);
+      rethrow;
     }
-    throw const ServerException('No se pudo obtener el perfil. Verifica que el schema esté aplicado en Supabase.');
   }
 
   Future<UserModel> _fetchUserProfile(String userId) async {
@@ -229,8 +262,9 @@ class AuthRemoteDatasource {
     if (m.contains('invalid login credentials') || m.contains('invalid_credentials')) {
       return 'Correo o contraseña incorrectos';
     }
-    if (m.contains('email already registered') || m.contains('already been registered')) {
-      return 'Este correo ya está registrado';
+    if (m.contains('email already registered') || m.contains('already been registered') ||
+        m.contains('user already registered')) {
+      return 'Este correo ya tiene una cuenta. Intenta iniciar sesión.';
     }
     if (m.contains('email not confirmed')) {
       return 'Confirma tu correo antes de iniciar sesión';
